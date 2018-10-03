@@ -6,6 +6,7 @@ import TypedSvg.Attributes exposing (..)
 import TypedSvg.Types exposing (..)
 import TypedSvg.Core exposing (text)
 import Geometry.Svg as Svg
+import Axis2d exposing (Axis2d)
 import Point2d exposing (Point2d)
 import Frame2d exposing (Frame2d)
 import Circle2d exposing (Circle2d)
@@ -14,12 +15,17 @@ import Direction2d exposing (Direction2d)
 import LineSegment2d exposing (LineSegment2d)
 
 
+-- Check getViewport in Browser-Dom for a plot that scales with the window
+-- Transform just the points (for the positions of objects)
+-- Use those to position circles, axises and text.
+
+
 inData =
-    [ { x = 0, y = 1 }
-    , { x = 2, y = 2 }
-    , { x = 3, y = 3 }
-    , { x = 4, y = 5 }
-    , { x = 5, y = 8 }
+    [ { id = 1, x = 0, y = 1 }
+    , { id = 2, x = 20, y = 2 }
+    , { id = 3, x = 3, y = 3 }
+    , { id = 4, x = 4, y = 5 }
+    , { id = 5, x = 5, y = 8 }
     ]
 
 
@@ -55,7 +61,7 @@ range =
 
 
 sceneHeight =
-    500
+    600
 
 
 axisOffset =
@@ -69,13 +75,25 @@ padding =
 scaleFactor =
     let
         totalRange =
-            range.y + axisOffset + padding
+            { x =
+                range.x + axisOffset + padding
+            , y =
+                range.y + axisOffset + padding
+            }
+
+        calculate =
+            (\theRange ->
+                sceneHeight
+                    / theRange
+                    |> round
+                    |> toFloat
+            )
     in
-        sceneHeight / totalRange
+        { x = calculate totalRange.x, y = calculate totalRange.y }
 
 
 inTargetScale float =
-    float / scaleFactor
+    float / scaleFactor.y
 
 
 toPoint record =
@@ -87,7 +105,9 @@ toPoint record =
 
 
 circlesAttributes =
-    [ fill <| Fill Color.lightGreen ]
+    [ fill <| Fill Color.lightGreen
+    , strokeWidth <| px <| inTargetScale 1
+    ]
 
 
 circles =
@@ -98,52 +118,71 @@ circles =
         |> g circlesAttributes
 
 
-makeAxis startX stopX startY stopY =
-    let
-        start =
-            Point2d.fromCoordinates ( startX, startY )
-
-        stop =
-            Point2d.fromCoordinates ( stopX, stopY )
-    in
-        LineSegment2d.from start stop
-            |> Svg.lineSegment2d []
+plotAxis =
+    { x =
+        { start =
+            Point2d.fromCoordinates
+                ( data.min.x, data.min.y - axisOffset )
+        , stop =
+            Point2d.fromCoordinates
+                ( data.max.x, data.min.y - axisOffset )
+        }
+    , y =
+        { start =
+            Point2d.fromCoordinates
+                ( data.min.x - axisOffset, data.min.y )
+        , stop =
+            Point2d.fromCoordinates
+                ( data.min.x - axisOffset, data.max.y )
+        }
+    }
 
 
 xAxis =
-    let
-        posY =
-            data.min.y - axisOffset
-    in
-        makeAxis data.min.x data.max.x posY posY
+    LineSegment2d.from plotAxis.x.start plotAxis.x.stop
+        |> Svg.lineSegment2d []
 
 
 yAxis =
-    let
-        posX =
-            data.min.x - axisOffset
-    in
-        makeAxis posX posX data.min.y data.max.y
+    LineSegment2d.from plotAxis.y.start plotAxis.y.stop
+        |> Svg.lineSegment2d []
 
 
-bothAxis =
-    g [] [ xAxis, yAxis ]
+plotAxisAttributes =
+    [ strokeWidth <| px <| inTargetScale 2 ]
+
+
+bothPlotAxis =
+    g plotAxisAttributes [ xAxis, yAxis ]
+
+
+textAttributes =
+    [ fontSize <| px <| inTargetScale 13
+    , fontFamily [ "super-sans" ]
+    , fontWeight FontWeightLighter
+    , fontStretch FontStretchUltraCondensed
+    , textRendering TextRenderingOptimizeLegibility
+    , strokeWidth <| px 0
+    ]
+
+
+myText posX posY abc =
+    text_
+        [ x <| px posX
+        , y <| px -posY
+        ]
+        [ text abc
+        ]
+        |> Svg.mirrorAcross Axis2d.x
 
 
 testText =
-    text_
-        [ x <| px 0
-        , y <| px 8
-        , fontSize <| px <| inTargetScale 40
-        , fill <| Fill Color.black
-        ]
-        [ text "Test text."
-        ]
+    g textAttributes
+        [ myText 0 6 "1234567890" ]
 
 
 geometryAttributes =
-    [ strokeWidth <| px <| inTargetScale 1
-    , stroke Color.black
+    [ stroke Color.black
     ]
 
 
@@ -168,7 +207,7 @@ topLeftFrame =
 
 
 allGeometry =
-    g geometryAttributes [ circles, bothAxis, testText ]
+    g geometryAttributes [ circles, bothPlotAxis, testText ]
 
 
 geometryPlusText =
@@ -177,7 +216,7 @@ geometryPlusText =
             Vector2d.withLength (0.1 * sceneHeight) Direction2d.positiveY
     in
         g [] [ allGeometry, testText ]
-            |> Svg.scaleAbout scalePoint scaleFactor
+            |> Svg.scaleAbout scalePoint scaleFactor.y
             |> Svg.relativeTo topLeftFrame
             |> Svg.translateBy vector
 
