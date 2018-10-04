@@ -1,5 +1,11 @@
 module Main exposing (main)
 
+-- Check getViewport in Browser-Dom for a plot that scales with the window
+-- Transform just the points (for the positions of objects)
+-- Use those to position circles, axises and text.
+
+import Browser
+import Html exposing (Html)
 import Color
 import TypedSvg exposing (svg, g, text_)
 import TypedSvg.Attributes exposing (..)
@@ -15,9 +21,23 @@ import Direction2d exposing (Direction2d)
 import LineSegment2d exposing (LineSegment2d)
 
 
--- Check getViewport in Browser-Dom for a plot that scales with the window
--- Transform just the points (for the positions of objects)
--- Use those to position circles, axises and text.
+-- Settings
+
+
+sceneWidth =
+    800
+
+
+sceneHeight =
+    600
+
+
+axisOffset =
+    1
+
+
+padding =
+    1
 
 
 inData =
@@ -29,20 +49,26 @@ inData =
     ]
 
 
-max list =
-    list
-        |> List.maximum
-        |> Maybe.withDefault 0
 
-
-min list =
-    list
-        |> List.minimum
-        |> Maybe.withDefault 0
+-- Calculated values
 
 
 data =
     let
+        max =
+            (\list ->
+                list
+                    |> List.maximum
+                    |> Maybe.withDefault 0
+            )
+
+        min =
+            (\list ->
+                list
+                    |> List.minimum
+                    |> Maybe.withDefault 0
+            )
+
         xs =
             inData |> List.map .x
 
@@ -60,18 +86,6 @@ range =
     }
 
 
-sceneHeight =
-    600
-
-
-axisOffset =
-    1
-
-
-padding =
-    1
-
-
 scaleFactor =
     let
         totalRange =
@@ -81,7 +95,7 @@ scaleFactor =
                 range.y + axisOffset + padding
             }
 
-        calculate =
+        getScaleFrom =
             (\theRange ->
                 sceneHeight
                     / theRange
@@ -89,7 +103,13 @@ scaleFactor =
                     |> toFloat
             )
     in
-        { x = calculate totalRange.x, y = calculate totalRange.y }
+        { x = getScaleFrom totalRange.x
+        , y = getScaleFrom totalRange.y
+        }
+
+
+
+-- Helpers
 
 
 inTargetScale float =
@@ -102,6 +122,10 @@ toPoint record =
             record
     in
         Point2d.fromCoordinates ( x, y )
+
+
+
+-- Geometry
 
 
 circlesAttributes =
@@ -118,7 +142,7 @@ circles =
         |> g circlesAttributes
 
 
-plotAxis =
+plotAxisPoints =
     { x =
         { start =
             Point2d.fromCoordinates
@@ -138,22 +162,24 @@ plotAxis =
     }
 
 
-xAxis =
-    LineSegment2d.from plotAxis.x.start plotAxis.x.stop
-        |> Svg.lineSegment2d []
-
-
-yAxis =
-    LineSegment2d.from plotAxis.y.start plotAxis.y.stop
-        |> Svg.lineSegment2d []
-
-
-plotAxisAttributes =
-    [ strokeWidth <| px <| inTargetScale 2 ]
-
-
 bothPlotAxis =
-    g plotAxisAttributes [ xAxis, yAxis ]
+    let
+        xAxis =
+            LineSegment2d.from
+                plotAxisPoints.x.start
+                plotAxisPoints.x.stop
+                |> Svg.lineSegment2d []
+
+        yAxis =
+            LineSegment2d.from
+                plotAxisPoints.y.start
+                plotAxisPoints.y.stop
+                |> Svg.lineSegment2d []
+
+        plotAxisAttributes =
+            [ strokeWidth <| px <| inTargetScale 2 ]
+    in
+        g plotAxisAttributes [ xAxis, yAxis ]
 
 
 textAttributes =
@@ -162,14 +188,16 @@ textAttributes =
     , fontWeight FontWeightLighter
     , fontStretch FontStretchUltraCondensed
     , textRendering TextRenderingOptimizeLegibility
+    , textAnchor AnchorMiddle
     , strokeWidth <| px 0
     ]
 
 
-myText posX posY abc =
+myText posX posY adjustY abc =
     text_
         [ x <| px posX
         , y <| px -posY
+        , dy <| px <| inTargetScale -adjustY
         ]
         [ text abc
         ]
@@ -178,7 +206,7 @@ myText posX posY abc =
 
 testText =
     g textAttributes
-        [ myText 0 6 "1234567890" ]
+        [ myText 0 0 -20 "1234567890" ]
 
 
 geometryAttributes =
@@ -186,37 +214,32 @@ geometryAttributes =
     ]
 
 
-scalePoint =
+geometryPlusText =
     let
         x =
             data.min.x - axisOffset - padding
 
         y =
             data.min.y - axisOffset - padding
-    in
-        Point2d.fromCoordinates ( x, y )
 
+        bottomLeft =
+            Point2d.fromCoordinates ( x, y )
 
-topLeftPoint =
-    Point2d.fromCoordinates ( 0, sceneHeight )
+        topLeftPoint =
+            Point2d.fromCoordinates ( x, y + sceneHeight )
 
+        topLeftFrame =
+            Frame2d.atPoint topLeftPoint
+                |> Frame2d.reverseY
 
-topLeftFrame =
-    Frame2d.atPoint topLeftPoint
-        |> Frame2d.reverseY
+        allGeometry =
+            g geometryAttributes [ circles, bothPlotAxis, testText ]
 
-
-allGeometry =
-    g geometryAttributes [ circles, bothPlotAxis, testText ]
-
-
-geometryPlusText =
-    let
         vector =
             Vector2d.withLength (0.1 * sceneHeight) Direction2d.positiveY
     in
         g [] [ allGeometry, testText ]
-            |> Svg.scaleAbout scalePoint scaleFactor.y
+            |> Svg.scaleAbout bottomLeft scaleFactor.y
             |> Svg.relativeTo topLeftFrame
             |> Svg.translateBy vector
 
@@ -227,5 +250,37 @@ rootAttributes =
     ]
 
 
-main =
+type alias Model =
+    List Int
+
+
+type Msg
+    = None
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( [], Cmd.none )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    ( model, Cmd.none )
+
+
+view : Model -> Html msg
+view model =
     svg rootAttributes [ geometryPlusText ]
+
+
+subscriptions model =
+    Sub.none
+
+
+main =
+    Browser.element
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        , view = view
+        }
