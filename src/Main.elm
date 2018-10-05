@@ -3,6 +3,8 @@ module Main exposing (main)
 -- Check getViewport in Browser-Dom for a plot that scales with the window
 -- Transform just the points (for the positions of objects)
 -- Use those to position circles, axises and text.
+-- Idea: edges of zoomed-in plot fades to transparency.
+-- Use Frame2d more for Data and Plot coordinate system
 
 import Browser
 import Html exposing (Html)
@@ -32,11 +34,15 @@ sceneHeight =
     600
 
 
-axisOffset =
-    1
+axisOffsetRatio =
+    0.05
 
 
-padding =
+paddingRatio =
+    0.05
+
+
+axisWidth =
     1
 
 
@@ -50,7 +56,42 @@ inData =
 
 
 
+-- Frames
+
+
+frame =
+    let
+        x =
+            sceneWidth * ( axisOffsetRatio, paddingRatio )
+
+        y =
+            sceneHeigth * ( axisOffsetRatio, paddingRatio )
+
+        plotOrigin =
+            ( x, y )
+    in
+        { plot = Frame2d.atCoordinates plotOrigin
+        , xBar =
+            Frame2d.atCoordinates plotOrigin
+                |> Frame.translateAlongOwn Frame2d.yAxis -axisOffsetAmount
+                |> Frame.mirroAcross Axis2d.x
+        , yBar =
+            Frame2d.atCoordinates plotOrigin
+                |> Frame.translateAlongOwn Frame2d.xAxis -axisOffsetAmount
+                |> Frame.rotateBy (degrees 90)
+        }
+
+
+
 -- Calculated values
+
+
+axisOffsetAmount =
+    (min sceneWidth sceneHeight) * axisOffsetRatio
+
+
+dataPlotWindowRatio =
+    1 - axisOffsetRatio - paddingRatio
 
 
 data =
@@ -90,21 +131,21 @@ scaleFactor =
     let
         totalRange =
             { x =
-                range.x + axisOffset + padding
+                range.x * (1 + axisOffsetRatio + paddingRatio)
             , y =
-                range.y + axisOffset + padding
+                range.y * (1 + axisOffsetRatio + paddingRatio)
             }
 
         getScaleFrom =
-            (\theRange ->
-                sceneHeight
+            (\theRange dimensionAmount ->
+                dimensionAmount
                     / theRange
                     |> round
                     |> toFloat
             )
     in
-        { x = getScaleFrom totalRange.x
-        , y = getScaleFrom totalRange.y
+        { x = getScaleFrom totalRange.x sceneWidth
+        , y = getScaleFrom totalRange.y sceneHeight
         }
 
 
@@ -112,7 +153,11 @@ scaleFactor =
 -- Helpers
 
 
-inTargetScale float =
+inTargetScaleX float =
+    float / scaleFactor.x
+
+
+inTargetScaleY float =
     float / scaleFactor.y
 
 
@@ -124,22 +169,43 @@ toPoint record =
         Point2d.fromCoordinates ( x, y )
 
 
+dataToPlotCoordinateTransform =
+    let
+        x =
+            data.min.x - axisOffset - padding
 
--- Geometry
+        y =
+            data.min.y - axisOffset - padding
+
+        bottomLeft =
+            Point2d.fromCoordinates ( x, y )
+
+        topLeftPoint =
+            Point2d.fromCoordinates ( x, y + sceneHeight )
+
+        topLeftFrame =
+            Frame2d.atPoint topLeftPoint
+                |> Frame2d.reverseY
+
+        allGeometry =
+            g geometryAttributes [ circles, bothPlotAxis, testText ]
+
+        vector =
+            Vector2d.withLength (0.1 * sceneHeight) Direction2d.positiveY
+    in
+        g [] [ allGeometry, testText ]
+            |> Svg.scaleAbout bottomLeft scaleFactor.y
+            |> Svg.relativeTo topLeftFrame
+            |> Svg.translateBy vector
 
 
-circlesAttributes =
-    [ fill <| Fill Color.lightGreen
-    , strokeWidth <| px <| inTargetScale 1
-    ]
+
+-- Points in datas coordinate system
 
 
-circles =
+circlePositions =
     inData
         |> List.map toPoint
-        |> List.map (Circle2d.withRadius (inTargetScale 3))
-        |> List.map (Svg.circle2d [])
-        |> g circlesAttributes
 
 
 plotAxisPoints =
@@ -162,6 +228,24 @@ plotAxisPoints =
     }
 
 
+
+-- Geometry
+
+
+circlesAttributes =
+    [ fill <| Fill Color.lightGreen
+    , strokeWidth <| px <| inTargetScale 1
+    ]
+
+
+circles =
+    inData
+        |> List.map toPoint
+        |> List.map (Circle2d.withRadius (inTargetScale 3))
+        |> List.map (Svg.circle2d [])
+        |> g circlesAttributes
+
+
 bothPlotAxis =
     let
         xAxis =
@@ -177,7 +261,7 @@ bothPlotAxis =
                 |> Svg.lineSegment2d []
 
         plotAxisAttributes =
-            [ strokeWidth <| px <| inTargetScale 2 ]
+            [ strokeWidth <| px <| inTargetScale axisWidth ]
     in
         g plotAxisAttributes [ xAxis, yAxis ]
 
