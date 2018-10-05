@@ -47,39 +47,12 @@ axisWidth =
 
 
 inData =
-    [ { id = 1, x = 0, y = 1 }
-    , { id = 2, x = 20, y = 2 }
-    , { id = 3, x = 3, y = 3 }
-    , { id = 4, x = 4, y = 5 }
-    , { id = 5, x = 5, y = 8 }
+    [ { id = 1, x = 0, y = 11 }
+    , { id = 2, x = 20, y = 12 }
+    , { id = 3, x = 3, y = 13 }
+    , { id = 4, x = 4, y = 15 }
+    , { id = 5, x = 5, y = 18 }
     ]
-
-
-
--- Frames
-
-
-frame =
-    let
-        x =
-            sceneWidth * ( axisOffsetRatio, paddingRatio )
-
-        y =
-            sceneHeigth * ( axisOffsetRatio, paddingRatio )
-
-        plotOrigin =
-            ( x, y )
-    in
-        { plot = Frame2d.atCoordinates plotOrigin
-        , xBar =
-            Frame2d.atCoordinates plotOrigin
-                |> Frame.translateAlongOwn Frame2d.yAxis -axisOffsetAmount
-                |> Frame.mirroAcross Axis2d.x
-        , yBar =
-            Frame2d.atCoordinates plotOrigin
-                |> Frame.translateAlongOwn Frame2d.xAxis -axisOffsetAmount
-                |> Frame.rotateBy (degrees 90)
-        }
 
 
 
@@ -146,6 +119,40 @@ scaleFactor =
     in
         { x = getScaleFrom totalRange.x sceneWidth
         , y = getScaleFrom totalRange.y sceneHeight
+        }
+
+
+
+-- Frames
+
+
+frame =
+    let
+        x =
+            sceneWidth * (axisOffsetRatio + paddingRatio)
+
+        y =
+            sceneHeigth * (axisOffsetRatio + paddingRatio)
+
+        plotOrigin =
+            ( x, y )
+    in
+        { dataWindow = Frame2d.atCoordinates ( data.min.x, data.min.y )
+        , plot =
+            { main = Frame2d.atCoordinates plotOrigin
+            , xBar =
+                Frame2d.atCoordinates plotOrigin
+                    |> Frame.translateAlongOwn
+                        Frame2d.yAxis
+                        -axisOffsetAmount
+                    |> Frame.mirroAcross Axis2d.x
+            , yBar =
+                Frame2d.atCoordinates plotOrigin
+                    |> Frame.translateAlongOwn
+                        Frame2d.xAxis
+                        -axisOffsetAmount
+                    |> Frame.rotateBy (degrees 90)
+            }
         }
 
 
