@@ -153,50 +153,12 @@ scaleFactor =
 -- Helpers
 
 
-inTargetScaleX float =
-    float / scaleFactor.x
-
-
-inTargetScaleY float =
-    float / scaleFactor.y
-
-
 toPoint record =
     let
         { x, y } =
             record
     in
         Point2d.fromCoordinates ( x, y )
-
-
-dataToPlotCoordinateTransform =
-    let
-        x =
-            data.min.x - axisOffset - padding
-
-        y =
-            data.min.y - axisOffset - padding
-
-        bottomLeft =
-            Point2d.fromCoordinates ( x, y )
-
-        topLeftPoint =
-            Point2d.fromCoordinates ( x, y + sceneHeight )
-
-        topLeftFrame =
-            Frame2d.atPoint topLeftPoint
-                |> Frame2d.reverseY
-
-        allGeometry =
-            g geometryAttributes [ circles, bothPlotAxis, testText ]
-
-        vector =
-            Vector2d.withLength (0.1 * sceneHeight) Direction2d.positiveY
-    in
-        g [] [ allGeometry, testText ]
-            |> Svg.scaleAbout bottomLeft scaleFactor.y
-            |> Svg.relativeTo topLeftFrame
-            |> Svg.translateBy vector
 
 
 
@@ -238,32 +200,8 @@ circlesAttributes =
     ]
 
 
-circles =
-    inData
-        |> List.map toPoint
-        |> List.map (Circle2d.withRadius (inTargetScale 3))
-        |> List.map (Svg.circle2d [])
-        |> g circlesAttributes
-
-
-bothPlotAxis =
-    let
-        xAxis =
-            LineSegment2d.from
-                plotAxisPoints.x.start
-                plotAxisPoints.x.stop
-                |> Svg.lineSegment2d []
-
-        yAxis =
-            LineSegment2d.from
-                plotAxisPoints.y.start
-                plotAxisPoints.y.stop
-                |> Svg.lineSegment2d []
-
-        plotAxisAttributes =
-            [ strokeWidth <| px <| inTargetScale axisWidth ]
-    in
-        g plotAxisAttributes [ xAxis, yAxis ]
+plotAxisAttributes =
+    [ strokeWidth <| px <| inTargetScale axisWidth ]
 
 
 textAttributes =
@@ -277,55 +215,9 @@ textAttributes =
     ]
 
 
-myText posX posY adjustY abc =
-    text_
-        [ x <| px posX
-        , y <| px -posY
-        , dy <| px <| inTargetScale -adjustY
-        ]
-        [ text abc
-        ]
-        |> Svg.mirrorAcross Axis2d.x
-
-
-testText =
-    g textAttributes
-        [ myText 0 0 -20 "1234567890" ]
-
-
 geometryAttributes =
     [ stroke Color.black
     ]
-
-
-geometryPlusText =
-    let
-        x =
-            data.min.x - axisOffset - padding
-
-        y =
-            data.min.y - axisOffset - padding
-
-        bottomLeft =
-            Point2d.fromCoordinates ( x, y )
-
-        topLeftPoint =
-            Point2d.fromCoordinates ( x, y + sceneHeight )
-
-        topLeftFrame =
-            Frame2d.atPoint topLeftPoint
-                |> Frame2d.reverseY
-
-        allGeometry =
-            g geometryAttributes [ circles, bothPlotAxis, testText ]
-
-        vector =
-            Vector2d.withLength (0.1 * sceneHeight) Direction2d.positiveY
-    in
-        g [] [ allGeometry, testText ]
-            |> Svg.scaleAbout bottomLeft scaleFactor.y
-            |> Svg.relativeTo topLeftFrame
-            |> Svg.translateBy vector
 
 
 rootAttributes =
