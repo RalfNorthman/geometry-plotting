@@ -63,7 +63,7 @@ axisOffsetAmount =
     (min sceneWidth sceneHeight) * axisOffsetRatio
 
 
-dataPlotWindowRatio =
+plotRatio =
     1 - axisOffsetRatio - paddingRatio
 
 
@@ -100,26 +100,10 @@ range =
     }
 
 
-scaleFactor =
-    let
-        totalRange =
-            { x =
-                range.x * (1 + axisOffsetRatio + paddingRatio)
-            , y =
-                range.y * (1 + axisOffsetRatio + paddingRatio)
-            }
-
-        getScaleFrom =
-            (\theRange dimensionAmount ->
-                dimensionAmount
-                    / theRange
-                    |> round
-                    |> toFloat
-            )
-    in
-        { x = getScaleFrom totalRange.x sceneWidth
-        , y = getScaleFrom totalRange.y sceneHeight
-        }
+dataToPlotScaleFactor =
+    { x = sceneWidth * plotRatio / totalRange.x
+    , y = sceneHeight * plotRatio / totalRange.y
+    }
 
 
 
@@ -159,6 +143,10 @@ frame =
 
 -- Helpers
 
+dataToPlotTransform  point =
+  point
+  |> Point2d.relativeTo frame.dataWindow
+  |> 
 
 toPoint record =
     let
@@ -169,7 +157,7 @@ toPoint record =
 
 
 
--- Points in datas coordinate system
+-- Points in datas coordinate system (global)
 
 
 circlePositions =
