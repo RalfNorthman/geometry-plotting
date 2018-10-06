@@ -27,19 +27,19 @@ import LineSegment2d exposing (LineSegment2d)
 
 
 sceneWidth =
-    800
+    500
 
 
 sceneHeight =
-    600
+    400
 
 
 axisOffsetRatio =
-    0.05
+    0.1
 
 
 paddingRatio =
-    0.05
+    0.1
 
 
 axisWidth =
@@ -48,10 +48,10 @@ axisWidth =
 
 inData =
     [ { id = 1, x = 0, y = 11 }
+    , { id = 3, x = 3, y = -13 }
+    , { id = 4, x = 4, y = -15 }
+    , { id = 5, x = 10, y = 18 }
     , { id = 2, x = 20, y = 12 }
-    , { id = 3, x = 3, y = 13 }
-    , { id = 4, x = 4, y = 15 }
-    , { id = 5, x = 5, y = 18 }
     ]
 
 
@@ -59,12 +59,16 @@ inData =
 -- Calculated values
 
 
-axisOffsetAmount =
-    (min sceneWidth sceneHeight) * axisOffsetRatio
+axisOffset =
+    (Basics.min sceneWidth sceneHeight) * axisOffsetRatio
 
 
-plotRatio =
-    1 - axisOffsetRatio - paddingRatio
+padding =
+    (Basics.min sceneWidth sceneHeight) * paddingRatio
+
+
+totalOffset =
+    axisOffset + padding
 
 
 data =
@@ -101,8 +105,8 @@ range =
 
 
 dataToPlotScaleFactor =
-    { x = sceneWidth * plotRatio / totalRange.x
-    , y = sceneHeight * plotRatio / totalRange.y
+    { x = (sceneWidth - axisOffset - 2 * padding) / range.x
+    , y = (sceneHeight - axisOffset - 2 * padding) / range.y
     }
 
 
@@ -112,41 +116,54 @@ dataToPlotScaleFactor =
 
 frame =
     let
-        x =
-            sceneWidth * (axisOffsetRatio + paddingRatio)
-
-        y =
-            sceneHeigth * (axisOffsetRatio + paddingRatio)
-
         plotOrigin =
-            ( x, y )
+            ( totalOffset, totalOffset )
     in
         { dataWindow = Frame2d.atCoordinates ( data.min.x, data.min.y )
         , plot =
             { main = Frame2d.atCoordinates plotOrigin
             , xBar =
                 Frame2d.atCoordinates plotOrigin
-                    |> Frame.translateAlongOwn
+                    |> Frame2d.translateAlongOwn
                         Frame2d.yAxis
-                        -axisOffsetAmount
-                    |> Frame.mirroAcross Axis2d.x
+                        -axisOffset
+                    |> Frame2d.reverseY
             , yBar =
                 Frame2d.atCoordinates plotOrigin
-                    |> Frame.translateAlongOwn
+                    |> Frame2d.translateAlongOwn
                         Frame2d.xAxis
-                        -axisOffsetAmount
-                    |> Frame.rotateBy (degrees 90)
+                        -axisOffset
+                    |> Frame2d.rotateBy (degrees 90)
             }
+        , finalFlip =
+            Frame2d.atCoordinates ( 0, sceneHeight )
+                |> Frame2d.reverseY
         }
 
 
 
 -- Helpers
 
-dataToPlotTransform  point =
-  point
-  |> Point2d.relativeTo frame.dataWindow
-  |> 
+
+scalePoint : Float -> Float -> Point2d -> Point2d
+scalePoint scaleX scaleY point =
+    let
+        ( x, y ) =
+            Point2d.coordinates point
+    in
+        Point2d.fromCoordinates
+            ( x * scaleX, y * scaleY )
+
+
+dataToPlotTransform point =
+    point
+        |> Point2d.relativeTo frame.dataWindow
+        |> scalePoint
+            dataToPlotScaleFactor.x
+            dataToPlotScaleFactor.y
+        |> Point2d.placeIn frame.plot.main
+        |> Point2d.placeIn frame.finalFlip
+
 
 toPoint record =
     let
@@ -191,16 +208,24 @@ plotAxisPoints =
 
 circlesAttributes =
     [ fill <| Fill Color.lightGreen
-    , strokeWidth <| px <| inTargetScale 1
+    , strokeWidth <| px 1
     ]
 
 
+circles =
+    circlePositions
+        |> List.map dataToPlotTransform
+        |> List.map
+            (Circle2d.withRadius 10)
+        |> List.map (Svg.circle2d [])
+
+
 plotAxisAttributes =
-    [ strokeWidth <| px <| inTargetScale axisWidth ]
+    [ strokeWidth <| px axisWidth ]
 
 
 textAttributes =
-    [ fontSize <| px <| inTargetScale 13
+    [ fontSize <| px 13
     , fontFamily [ "super-sans" ]
     , fontWeight FontWeightLighter
     , fontStretch FontStretchUltraCondensed
@@ -216,9 +241,14 @@ geometryAttributes =
 
 
 rootAttributes =
-    [ width <| percent 100
-    , height <| px <| 1.1 * sceneHeight
+    [ width <| px sceneWidth
+    , height <| px sceneHeight
     ]
+
+
+scene =
+    g geometryAttributes
+        [ g circlesAttributes circles ]
 
 
 type alias Model =
@@ -241,7 +271,7 @@ update msg model =
 
 view : Model -> Html msg
 view model =
-    svg rootAttributes [ geometryPlusText ]
+    svg rootAttributes [ scene ]
 
 
 subscriptions model =
