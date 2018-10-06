@@ -9,6 +9,7 @@ module Main exposing (main)
 import Browser
 import Html exposing (Html)
 import Color
+import Scale
 import TypedSvg exposing (svg, g, text_)
 import TypedSvg.Attributes exposing (..)
 import TypedSvg.Types exposing (..)
@@ -47,6 +48,16 @@ axisWidth =
 
 
 inData =
+    [ { id = 1, x = 0, y = 0 }
+    , { id = 3, x = 0, y = 1 }
+    , { id = 4, x = 1, y = 0 }
+    , { id = 5, x = 1, y = 1 }
+    , { id = 2, x = 0.5, y = 0.5 }
+    , { id = 6, x = 0.75, y = 0.25 }
+    ]
+
+
+inData2 =
     [ { id = 1, x = 0, y = 11 }
     , { id = 3, x = 3, y = -13 }
     , { id = 4, x = 4, y = -15 }
@@ -104,12 +115,6 @@ range =
     }
 
 
-dataToPlotScaleFactor =
-    { x = (sceneWidth - axisOffset - 2 * padding) / range.x
-    , y = (sceneHeight - axisOffset - 2 * padding) / range.y
-    }
-
-
 
 -- Frames
 
@@ -142,26 +147,37 @@ frame =
 
 
 
+-- Scales
+
+
+scale =
+    { x =
+        Scale.linear
+            ( totalOffset, sceneWidth - padding )
+            ( data.min.x, data.max.x )
+    , y =
+        Scale.linear
+            ( totalOffset, sceneHeight - padding )
+            ( data.min.y, data.max.y )
+    }
+
+
+
 -- Helpers
 
 
-scalePoint : Float -> Float -> Point2d -> Point2d
-scalePoint scaleX scaleY point =
+convertPoint point =
     let
         ( x, y ) =
             Point2d.coordinates point
     in
         Point2d.fromCoordinates
-            ( x * scaleX, y * scaleY )
+            ( Scale.convert scale.x x, Scale.convert scale.y y )
 
 
 dataToPlotTransform point =
     point
-        |> Point2d.relativeTo frame.dataWindow
-        |> scalePoint
-            dataToPlotScaleFactor.x
-            dataToPlotScaleFactor.y
-        |> Point2d.placeIn frame.plot.main
+        |> convertPoint
         |> Point2d.placeIn frame.finalFlip
 
 
@@ -174,12 +190,13 @@ toPoint record =
 
 
 
--- Points in datas coordinate system (global)
+-- Points
 
 
 circlePositions =
     inData
         |> List.map toPoint
+        |> List.map dataToPlotTransform
 
 
 plotAxisPoints =
@@ -203,7 +220,7 @@ plotAxisPoints =
 
 
 
--- Geometry
+-- Svg drawing
 
 
 circlesAttributes =
@@ -214,7 +231,6 @@ circlesAttributes =
 
 circles =
     circlePositions
-        |> List.map dataToPlotTransform
         |> List.map
             (Circle2d.withRadius 10)
         |> List.map (Svg.circle2d [])
@@ -249,6 +265,10 @@ rootAttributes =
 scene =
     g geometryAttributes
         [ g circlesAttributes circles ]
+
+
+
+-- Architecture
 
 
 type alias Model =
