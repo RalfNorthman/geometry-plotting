@@ -7,6 +7,7 @@ module Main exposing (main)
 -- Use Frame2d more for Data and Plot coordinate system
 
 import Browser
+import Maybe.Extra
 import Html exposing (Html)
 import Color
 import Scale
@@ -60,11 +61,15 @@ data2 =
 
 
 data =
-    [ { id = 1, x = 0, y = 11 }
+    [ { id = 1, x = 1.32947387, y = 11 }
     , { id = 3, x = 3, y = -13 }
     , { id = 4, x = 4, y = -15 }
-    , { id = 5, x = 10, y = 18 }
-    , { id = 2, x = 20, y = 12 }
+    , { id = 5, x = 10, y = 18.5 }
+    , { id = 2, x = 20, y = 0 }
+    , { id = 6, x = 13, y = 11 }
+    , { id = 7, x = 7, y = 4 }
+    , { id = 8, x = 15, y = 8 }
+    , { id = 9, x = 13, y = 6 }
     ]
 
 
@@ -166,16 +171,51 @@ circles =
         |> List.map (Svg.circle2d [])
 
 
+createAxisAttributes list =
+    let
+        min =
+            List.minimum list
+
+        max =
+            List.maximum list
+
+        quantiles =
+            List.map
+                (\q -> Statistics.quantile q list)
+                [ 0.25, 0.5, 0.75 ]
+
+        tickList =
+            min
+                :: (max :: quantiles)
+                |> Maybe.Extra.values
+    in
+        [ Axis.ticks tickList ]
+
+
 xAxis =
-    Axis.bottom [] scale.x
-        |> Svg.translateBy
-            (Vector2d.fromComponents ( 0, sceneHeight - padding ))
+    let
+        xs =
+            List.map .x data
+
+        xAxisAttributes =
+            createAxisAttributes xs
+    in
+        Axis.bottom xAxisAttributes scale.x
+            |> Svg.translateBy
+                (Vector2d.fromComponents ( 0, sceneHeight - padding ))
 
 
 yAxis =
-    Axis.left [] scale.y
-        |> Svg.translateBy
-            (Vector2d.fromComponents ( padding, 0 ))
+    let
+        ys =
+            List.map .y data
+
+        yAxisAttributes =
+            createAxisAttributes ys
+    in
+        Axis.left yAxisAttributes scale.y
+            |> Svg.translateBy
+                (Vector2d.fromComponents ( padding, 0 ))
 
 
 plotAxisAttributes =
