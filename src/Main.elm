@@ -10,6 +10,8 @@ import Browser
 import Html exposing (Html)
 import Color
 import Scale
+import Axis
+import Statistics
 import TypedSvg exposing (svg, g, text_)
 import TypedSvg.Attributes exposing (..)
 import TypedSvg.Types exposing (..)
@@ -47,7 +49,7 @@ axisWidth =
     1
 
 
-inData =
+data =
     [ { id = 1, x = 0, y = 0 }
     , { id = 3, x = 0, y = 1 }
     , { id = 4, x = 1, y = 0 }
@@ -57,7 +59,7 @@ inData =
     ]
 
 
-inData2 =
+data2 =
     [ { id = 1, x = 0, y = 11 }
     , { id = 3, x = 3, y = -13 }
     , { id = 4, x = 4, y = -15 }
@@ -82,68 +84,17 @@ totalOffset =
     axisOffset + padding
 
 
-data =
-    let
-        max =
-            (\list ->
-                list
-                    |> List.maximum
-                    |> Maybe.withDefault 0
-            )
-
-        min =
-            (\list ->
-                list
-                    |> List.minimum
-                    |> Maybe.withDefault 0
-            )
-
-        xs =
-            inData |> List.map .x
-
-        ys =
-            inData |> List.map .y
-    in
-        { max = { x = max xs, y = max ys }
-        , min = { x = min xs, y = min ys }
-        }
+getRangeBy accessor listOfRecords =
+    listOfRecords
+        |> List.map accessor
+        |> Statistics.extent
+        |> Maybe.withDefault ( 0, 0 )
 
 
 range =
-    { x = data.max.x - data.min.x
-    , y = data.max.y - data.min.y
+    { x = getRangeBy .x data
+    , y = getRangeBy .y data
     }
-
-
-
--- Frames
-
-
-frame =
-    let
-        plotOrigin =
-            ( totalOffset, totalOffset )
-    in
-        { dataWindow = Frame2d.atCoordinates ( data.min.x, data.min.y )
-        , plot =
-            { main = Frame2d.atCoordinates plotOrigin
-            , xBar =
-                Frame2d.atCoordinates plotOrigin
-                    |> Frame2d.translateAlongOwn
-                        Frame2d.yAxis
-                        -axisOffset
-                    |> Frame2d.reverseY
-            , yBar =
-                Frame2d.atCoordinates plotOrigin
-                    |> Frame2d.translateAlongOwn
-                        Frame2d.xAxis
-                        -axisOffset
-                    |> Frame2d.rotateBy (degrees 90)
-            }
-        , finalFlip =
-            Frame2d.atCoordinates ( 0, sceneHeight )
-                |> Frame2d.reverseY
-        }
 
 
 
@@ -153,12 +104,12 @@ frame =
 scale =
     { x =
         Scale.linear
-            ( totalOffset, sceneWidth - padding )
-            ( data.min.x, data.max.x )
+            ( totalOffset, sceneHeight - padding )
+            range.x
     , y =
         Scale.linear
-            ( totalOffset, sceneHeight - padding )
-            ( data.min.y, data.max.y )
+            ( sceneHeight - padding, totalOffset )
+            range.y
     }
 
 
@@ -178,7 +129,6 @@ convertPoint point =
 dataToPlotTransform point =
     point
         |> convertPoint
-        |> Point2d.placeIn frame.finalFlip
 
 
 toPoint record =
@@ -194,29 +144,9 @@ toPoint record =
 
 
 circlePositions =
-    inData
+    data
         |> List.map toPoint
         |> List.map dataToPlotTransform
-
-
-plotAxisPoints =
-    { x =
-        { start =
-            Point2d.fromCoordinates
-                ( data.min.x, data.min.y - axisOffset )
-        , stop =
-            Point2d.fromCoordinates
-                ( data.max.x, data.min.y - axisOffset )
-        }
-    , y =
-        { start =
-            Point2d.fromCoordinates
-                ( data.min.x - axisOffset, data.min.y )
-        , stop =
-            Point2d.fromCoordinates
-                ( data.min.x - axisOffset, data.max.y )
-        }
-    }
 
 
 
@@ -232,8 +162,20 @@ circlesAttributes =
 circles =
     circlePositions
         |> List.map
-            (Circle2d.withRadius 10)
+            (Circle2d.withRadius 5)
         |> List.map (Svg.circle2d [])
+
+
+xAxis =
+    Axis.bottom [] scale.x
+        |> Svg.translateBy
+            (Vector2d.fromComponents ( 0, sceneHeight - padding ))
+
+
+yAxis =
+    Axis.left [] scale.y
+        |> Svg.translateBy
+            (Vector2d.fromComponents ( 0, 0 ))
 
 
 plotAxisAttributes =
@@ -264,7 +206,9 @@ rootAttributes =
 
 scene =
     g geometryAttributes
-        [ g circlesAttributes circles ]
+        [ g circlesAttributes circles
+        , g plotAxisAttributes [ xAxis, yAxis ]
+        ]
 
 
 
