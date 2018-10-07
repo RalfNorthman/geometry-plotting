@@ -49,7 +49,7 @@ axisWidth =
     1
 
 
-data =
+data2 =
     [ { id = 1, x = 0, y = 0 }
     , { id = 3, x = 0, y = 1 }
     , { id = 4, x = 1, y = 0 }
@@ -59,7 +59,7 @@ data =
     ]
 
 
-data2 =
+data =
     [ { id = 1, x = 0, y = 11 }
     , { id = 3, x = 3, y = -13 }
     , { id = 4, x = 4, y = -15 }
@@ -104,11 +104,11 @@ range =
 scale =
     { x =
         Scale.linear
-            ( totalOffset, sceneHeight - padding )
+            ( totalOffset, sceneWidth - padding )
             range.x
     , y =
         Scale.linear
-            ( sceneHeight - padding, totalOffset )
+            ( sceneHeight - totalOffset, padding )
             range.y
     }
 
@@ -175,7 +175,7 @@ xAxis =
 yAxis =
     Axis.left [] scale.y
         |> Svg.translateBy
-            (Vector2d.fromComponents ( 0, 0 ))
+            (Vector2d.fromComponents ( padding, 0 ))
 
 
 plotAxisAttributes =
