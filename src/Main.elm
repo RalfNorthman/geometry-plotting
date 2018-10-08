@@ -1,10 +1,7 @@
 module Main exposing (main)
 
 -- Check getViewport in Browser-Dom for a plot that scales with the window
--- Transform just the points (for the positions of objects)
--- Use those to position circles, axises and text.
 -- Idea: edges of zoomed-in plot fades to transparency.
--- Use Frame2d more for Data and Plot coordinate system
 
 import Browser
 import Maybe.Extra
@@ -35,7 +32,7 @@ sceneWidth =
 
 
 sceneHeight =
-    400
+    300
 
 
 axisOffsetRatio =
@@ -43,29 +40,23 @@ axisOffsetRatio =
 
 
 paddingRatio =
-    0.1
+    0.15
 
 
 axisWidth =
     1
 
 
-data2 =
-    [ { id = 1, x = 0, y = 0 }
-    , { id = 3, x = 0, y = 1 }
-    , { id = 4, x = 1, y = 0 }
-    , { id = 5, x = 1, y = 1 }
-    , { id = 2, x = 0.5, y = 0.5 }
-    , { id = 6, x = 0.75, y = 0.25 }
-    ]
+circleRadiusBase =
+    5
 
 
 data =
     [ { id = 1, x = 1.32947387, y = 11 }
+    , { id = 2, x = 21, y = 0 }
     , { id = 3, x = 3, y = -13 }
     , { id = 4, x = 4, y = -15 }
     , { id = 5, x = 10, y = 18.5 }
-    , { id = 2, x = 20, y = 0 }
     , { id = 6, x = 13, y = 11 }
     , { id = 7, x = 7, y = 4 }
     , { id = 8, x = 15, y = 8 }
@@ -77,12 +68,20 @@ data =
 -- Calculated values
 
 
+smallestSceneDimension =
+    Basics.min sceneWidth sceneHeight
+
+
+circleRadius =
+    2 + circleRadiusBase * smallestSceneDimension / 700
+
+
 axisOffset =
-    (Basics.min sceneWidth sceneHeight) * axisOffsetRatio
+    smallestSceneDimension * axisOffsetRatio
 
 
 padding =
-    (Basics.min sceneWidth sceneHeight) * paddingRatio
+    smallestSceneDimension * paddingRatio
 
 
 totalOffset =
@@ -161,76 +160,75 @@ circlePositions =
 circlesAttributes =
     [ fill <| Fill Color.lightGreen
     , strokeWidth <| px 1
+    , stroke Color.black
     ]
 
 
 circles =
     circlePositions
         |> List.map
-            (Circle2d.withRadius 5)
+            (Circle2d.withRadius circleRadius)
         |> List.map (Svg.circle2d [])
 
 
-createAxisAttributes list =
+createAxisAttributes scale_ =
     let
-        min =
-            List.minimum list
+        ( a, b ) =
+            Scale.range scale_
 
-        max =
-            List.maximum list
+        insideTickMin =
+            Basics.min a b
+                + 25.0
+                |> Scale.invert scale_
 
-        quantiles =
-            List.map
-                (\q -> Statistics.quantile q list)
-                [ 0.25, 0.5, 0.75 ]
+        insideTickMax =
+            Basics.max a b
+                - 25.0
+                |> Scale.invert scale_
+
+        numberOfInsideTicks =
+            abs (a - b) / 100 |> round
+
+        ( min, max ) =
+            Scale.domain scale_
 
         tickList =
             min
-                :: (max :: quantiles)
-                |> Maybe.Extra.values
+                :: max
+                :: Statistics.ticks
+                    insideTickMin
+                    insideTickMax
+                    numberOfInsideTicks
     in
         [ Axis.ticks tickList ]
 
 
 xAxis =
     let
-        xs =
-            List.map .x data
-
         xAxisAttributes =
-            createAxisAttributes xs
+            createAxisAttributes scale.x
+
+        downSceneHeightButPadding =
+            Vector2d.fromComponents ( 0, sceneHeight - padding )
     in
         Axis.bottom xAxisAttributes scale.x
-            |> Svg.translateBy
-                (Vector2d.fromComponents ( 0, sceneHeight - padding ))
+            |> Svg.translateBy downSceneHeightButPadding
 
 
 yAxis =
     let
-        ys =
-            List.map .y data
-
         yAxisAttributes =
-            createAxisAttributes ys
+            createAxisAttributes scale.y
+
+        rightPadding =
+            Vector2d.fromComponents ( padding, 0 )
     in
         Axis.left yAxisAttributes scale.y
-            |> Svg.translateBy
-                (Vector2d.fromComponents ( padding, 0 ))
+            |> Svg.translateBy rightPadding
 
 
 plotAxisAttributes =
     [ strokeWidth <| px axisWidth ]
-
-
-textAttributes =
-    [ fontSize <| px 13
-    , fontFamily [ "super-sans" ]
-    , fontWeight FontWeightLighter
-    , fontStretch FontStretchUltraCondensed
-    , textRendering TextRenderingOptimizeLegibility
-    , textAnchor AnchorMiddle
-    , strokeWidth <| px 0
-    ]
 
 
 geometryAttributes =
@@ -245,7 +243,7 @@ rootAttributes =
 
 
 scene =
-    g geometryAttributes
+    g []
         [ g circlesAttributes circles
         , g plotAxisAttributes [ xAxis, yAxis ]
         ]
