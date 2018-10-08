@@ -35,7 +35,7 @@ axisOffsetRatio =
 
 
 paddingRatio =
-    0.05
+    0.03
 
 
 axisWidth =
@@ -60,7 +60,7 @@ data =
 
 
 
--- Get inital viewport dimensions
+-- Get viewport dimensions
 
 
 getDimensions =
@@ -84,7 +84,7 @@ emptyViewport =
 type Msg
     = None
     | GetDimensions Viewport
-    | NewDimensions Float Float
+    | NewDimensions
 
 
 init : () -> ( Model, Cmd Msg )
@@ -102,8 +102,8 @@ update msg model =
             , Cmd.none
             )
 
-        NewDimensions x y ->
-            ( Model x y, Cmd.none )
+        NewDimensions ->
+            ( model, getDimensions )
 
         None ->
             ( model, Cmd.none )
@@ -113,10 +113,10 @@ view : Model -> Html msg
 view model =
     let
         sceneWidth =
-            0.9 * model.x
+            0.93 * model.x
 
         sceneHeight =
-            0.9 * model.y
+            0.93 * model.y
 
         -- Calculated values
         smallestSceneDimension =
@@ -129,7 +129,7 @@ view model =
             smallestSceneDimension * axisOffsetRatio
 
         padding =
-            smallestSceneDimension * paddingRatio + 15
+            smallestSceneDimension * paddingRatio + 20
 
         totalOffset =
             axisOffset + padding
@@ -271,7 +271,7 @@ view model =
 
 
 subscriptions model =
-    Events.onResize (\x y -> NewDimensions (toFloat x) (toFloat y))
+    Events.onResize (\_ _ -> NewDimensions)
 
 
 main =
