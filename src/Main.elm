@@ -3,7 +3,10 @@ module Main exposing (main)
 -- Check getViewport in Browser-Dom for a plot that scales with the window
 -- Idea: edges of zoomed-in plot fades to transparency.
 
+import Task
 import Browser
+import Browser.Dom as Dom exposing (Viewport)
+import Browser.Events as Events
 import Maybe.Extra
 import Html exposing (Html)
 import Color
@@ -27,20 +30,12 @@ import LineSegment2d exposing (LineSegment2d)
 -- Settings
 
 
-sceneWidth =
-    500
-
-
-sceneHeight =
-    300
-
-
 axisOffsetRatio =
     0.1
 
 
 paddingRatio =
-    0.15
+    0.05
 
 
 axisWidth =
@@ -65,188 +60,11 @@ data =
 
 
 
--- Calculated values
+-- Get inital viewport dimensions
 
 
-smallestSceneDimension =
-    Basics.min sceneWidth sceneHeight
-
-
-circleRadius =
-    2 + circleRadiusBase * smallestSceneDimension / 700
-
-
-axisOffset =
-    smallestSceneDimension * axisOffsetRatio
-
-
-padding =
-    smallestSceneDimension * paddingRatio
-
-
-totalOffset =
-    axisOffset + padding
-
-
-getRangeBy accessor listOfRecords =
-    listOfRecords
-        |> List.map accessor
-        |> Statistics.extent
-        |> Maybe.withDefault ( 0, 0 )
-
-
-range =
-    { x = getRangeBy .x data
-    , y = getRangeBy .y data
-    }
-
-
-
--- Scales
-
-
-scale =
-    { x =
-        Scale.linear
-            ( totalOffset, sceneWidth - padding )
-            range.x
-    , y =
-        Scale.linear
-            ( sceneHeight - totalOffset, padding )
-            range.y
-    }
-
-
-
--- Helpers
-
-
-convertPoint point =
-    let
-        ( x, y ) =
-            Point2d.coordinates point
-    in
-        Point2d.fromCoordinates
-            ( Scale.convert scale.x x, Scale.convert scale.y y )
-
-
-dataToPlotTransform point =
-    point
-        |> convertPoint
-
-
-toPoint record =
-    let
-        { x, y } =
-            record
-    in
-        Point2d.fromCoordinates ( x, y )
-
-
-
--- Points
-
-
-circlePositions =
-    data
-        |> List.map toPoint
-        |> List.map dataToPlotTransform
-
-
-
--- Svg drawing
-
-
-circlesAttributes =
-    [ fill <| Fill Color.lightGreen
-    , strokeWidth <| px 1
-    , stroke Color.black
-    ]
-
-
-circles =
-    circlePositions
-        |> List.map
-            (Circle2d.withRadius circleRadius)
-        |> List.map (Svg.circle2d [])
-
-
-createAxisAttributes scale_ =
-    let
-        ( a, b ) =
-            Scale.range scale_
-
-        insideTickMin =
-            Basics.min a b
-                + 25.0
-                |> Scale.invert scale_
-
-        insideTickMax =
-            Basics.max a b
-                - 25.0
-                |> Scale.invert scale_
-
-        numberOfInsideTicks =
-            abs (a - b) / 100 |> round
-
-        ( min, max ) =
-            Scale.domain scale_
-
-        tickList =
-            min
-                :: max
-                :: Statistics.ticks
-                    insideTickMin
-                    insideTickMax
-                    numberOfInsideTicks
-    in
-        [ Axis.ticks tickList ]
-
-
-xAxis =
-    let
-        xAxisAttributes =
-            createAxisAttributes scale.x
-
-        downSceneHeightButPadding =
-            Vector2d.fromComponents ( 0, sceneHeight - padding )
-    in
-        Axis.bottom xAxisAttributes scale.x
-            |> Svg.translateBy downSceneHeightButPadding
-
-
-yAxis =
-    let
-        yAxisAttributes =
-            createAxisAttributes scale.y
-
-        rightPadding =
-            Vector2d.fromComponents ( padding, 0 )
-    in
-        Axis.left yAxisAttributes scale.y
-            |> Svg.translateBy rightPadding
-
-
-plotAxisAttributes =
-    [ strokeWidth <| px axisWidth ]
-
-
-geometryAttributes =
-    [ stroke Color.black
-    ]
-
-
-rootAttributes =
-    [ width <| px sceneWidth
-    , height <| px sceneHeight
-    ]
-
-
-scene =
-    g []
-        [ g circlesAttributes circles
-        , g plotAxisAttributes [ xAxis, yAxis ]
-        ]
+getDimensions =
+    Task.perform GetDimensions Dom.getViewport
 
 
 
@@ -254,30 +72,206 @@ scene =
 
 
 type alias Model =
-    List Int
+    { x : Float, y : Float }
+
+
+emptyViewport =
+    Viewport
+        { width = 0, height = 0 }
+        { x = 0, y = 0, width = 0, height = 0 }
 
 
 type Msg
     = None
+    | GetDimensions Viewport
+    | NewDimensions Float Float
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( [], Cmd.none )
+    ( Model 0 0, getDimensions )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model, Cmd.none )
+    case msg of
+        GetDimensions viewport ->
+            ( Model
+                viewport.viewport.width
+                viewport.viewport.height
+            , Cmd.none
+            )
+
+        NewDimensions x y ->
+            ( Model x y, Cmd.none )
+
+        None ->
+            ( model, Cmd.none )
 
 
 view : Model -> Html msg
 view model =
-    svg rootAttributes [ scene ]
+    let
+        sceneWidth =
+            0.9 * model.x
+
+        sceneHeight =
+            0.9 * model.y
+
+        -- Calculated values
+        smallestSceneDimension =
+            Basics.min sceneWidth sceneHeight
+
+        circleRadius =
+            2 + circleRadiusBase * smallestSceneDimension / 700
+
+        axisOffset =
+            smallestSceneDimension * axisOffsetRatio
+
+        padding =
+            smallestSceneDimension * paddingRatio + 15
+
+        totalOffset =
+            axisOffset + padding
+
+        getRangeBy accessor listOfRecords =
+            listOfRecords
+                |> List.map accessor
+                |> Statistics.extent
+                |> Maybe.withDefault ( 0, 0 )
+
+        range =
+            { x = getRangeBy .x data
+            , y = getRangeBy .y data
+            }
+
+        -- Scales
+        scale =
+            { x =
+                Scale.linear
+                    ( totalOffset, sceneWidth - padding )
+                    range.x
+            , y =
+                Scale.linear
+                    ( sceneHeight - totalOffset, padding )
+                    range.y
+            }
+
+        -- Helpers
+        convertPoint point =
+            let
+                ( x, y ) =
+                    Point2d.coordinates point
+            in
+                Point2d.fromCoordinates
+                    ( Scale.convert scale.x x, Scale.convert scale.y y )
+
+        dataToPlotTransform point =
+            point
+                |> convertPoint
+
+        toPoint record =
+            let
+                { x, y } =
+                    record
+            in
+                Point2d.fromCoordinates ( x, y )
+
+        -- Points
+        circlePositions =
+            data
+                |> List.map toPoint
+                |> List.map dataToPlotTransform
+
+        -- Svg drawing
+        circlesAttributes =
+            [ fill <| Fill Color.lightGreen
+            , strokeWidth <| px 1
+            , stroke Color.black
+            ]
+
+        circles =
+            circlePositions
+                |> List.map
+                    (Circle2d.withRadius circleRadius)
+                |> List.map (Svg.circle2d [])
+
+        createAxisAttributes scale_ =
+            let
+                ( a, b ) =
+                    Scale.range scale_
+
+                insideTickMin =
+                    Basics.min a b
+                        + 25.0
+                        |> Scale.invert scale_
+
+                insideTickMax =
+                    Basics.max a b
+                        - 25.0
+                        |> Scale.invert scale_
+
+                numberOfInsideTicks =
+                    abs (a - b) / 100 |> round
+
+                ( min, max ) =
+                    Scale.domain scale_
+
+                tickList =
+                    min
+                        :: max
+                        :: Statistics.ticks
+                            insideTickMin
+                            insideTickMax
+                            numberOfInsideTicks
+            in
+                [ Axis.ticks tickList ]
+
+        xAxis =
+            let
+                xAxisAttributes =
+                    createAxisAttributes scale.x
+
+                downSceneHeightButPadding =
+                    Vector2d.fromComponents ( 0, sceneHeight - padding )
+            in
+                Axis.bottom xAxisAttributes scale.x
+                    |> Svg.translateBy downSceneHeightButPadding
+
+        yAxis =
+            let
+                yAxisAttributes =
+                    createAxisAttributes scale.y
+
+                rightPadding =
+                    Vector2d.fromComponents ( padding, 0 )
+            in
+                Axis.left yAxisAttributes scale.y
+                    |> Svg.translateBy rightPadding
+
+        plotAxisAttributes =
+            [ strokeWidth <| px axisWidth ]
+
+        geometryAttributes =
+            [ stroke Color.black
+            ]
+
+        rootAttributes =
+            [ width <| px sceneWidth
+            , height <| px sceneHeight
+            ]
+
+        scene =
+            g []
+                [ g circlesAttributes circles
+                , g plotAxisAttributes [ xAxis, yAxis ]
+                ]
+    in
+        svg rootAttributes [ scene ]
 
 
 subscriptions model =
-    Sub.none
+    Events.onResize (\x y -> NewDimensions (toFloat x) (toFloat y))
 
 
 main =
